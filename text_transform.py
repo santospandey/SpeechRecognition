@@ -62,7 +62,7 @@ class TextTransform:
          ो  56
          ौ  57
         ॐ 58
-        ॠ  59
+        ॠ 59
         ।  60 
         ०  61
         १  62
@@ -75,6 +75,12 @@ class TextTransform:
         ८  69
         ९  70
         <SPACE> 71
+        \u200c 72
+        \u200d 73
+        . 74
+        ऋ 75
+         ़  76
+        <UNK> 77
         """
 
         self.char_map = {}
@@ -84,6 +90,7 @@ class TextTransform:
             self.char_map[ch] = int(index)
             self.index_map[int(index)] = ch
         self.index_map[1] = " "
+        print("Test ")
 
     def text_to_int(self, text):
         """Use a character map and convert text to an integer sequence"""
@@ -92,7 +99,7 @@ class TextTransform:
             if c == " ":
                 ch = self.char_map["<SPACE>"]
             else:
-                ch = self.char_map[c]
+                ch = self.char_map.get(c, self.char_map["<UNK>"])
             int_sequence.append(ch)
         return int_sequence
 
