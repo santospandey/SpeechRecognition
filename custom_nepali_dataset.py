@@ -50,35 +50,8 @@ class NepaliSoundDataset(Dataset):
         audio_sample_path = self._get_audio_sample_path(index)
         output = self._get_audio_sample_output(index)
         signal, sr = torchaudio.load(audio_sample_path)
-        signal = signal.to(self.device)
-        signal = self._resample(signal, sr)
-        signal = self._mix_down(signal)
-        signal = self.transformation(signal)
+        # signal = signal.to(self.device)
+        # signal = self._resample(signal, sr)
+        # signal = self._mix_down(signal)
+        # signal = self.transformation(signal)
         return signal, output
-
-
-if __name__ == "__main__":
-    ANNOTATIONS_FILE_PATH = (
-        "/Users/santoshpandey/Desktop/ASR/code/data/OpenSLR/utt_spk_text.tsv"
-    )
-    AUDIO_DIR = "/Users/santoshpandey/Desktop/ASR/code/data/OpenSLR"
-    SAMPLE_RATE = 16000
-
-    if torch.cuda.is_available():
-        device = "cuda"
-    else:
-        device = "cpu"
-
-    print(f"Using device {device}")
-
-    mel_spectrogram = torchaudio.transforms.MelSpectrogram(
-        sample_rate=SAMPLE_RATE, n_fft=1024, hop_length=512, n_mels=64
-    )
-
-    dataset = NepaliSoundDataset(
-        ANNOTATIONS_FILE_PATH, AUDIO_DIR, mel_spectrogram, SAMPLE_RATE, device
-    )
-    print(f"There are {len(dataset)} items")
-    signal, output = dataset[67]
-    print(f"signal shape {signal.shape}")
-    print(f"signal {signal}\n output {output}")
