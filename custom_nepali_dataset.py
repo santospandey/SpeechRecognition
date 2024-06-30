@@ -16,7 +16,7 @@ class NepaliSoundDataset(Dataset):
         target_sample_rate,
         device,
     ):
-        self.annotaions = pd.read_csv(annotations_file_path, sep="\t")
+        self.annotaions = pd.read_csv(annotations_file_path, sep="\t", nrows=2000)
         self.audio_dir = audio_dir
         self.device = device
         self.transformation = transformation.to(self.device)
@@ -24,6 +24,9 @@ class NepaliSoundDataset(Dataset):
 
     def __len__(self):
         return len(self.annotaions)
+
+    def _get_speaker_id(self, index):
+        return self.annotaions.iloc[index, 1].strip()
 
     def _get_audio_sample_path(self, index):
         filename = self.annotaions.iloc[index, 0].strip()
@@ -48,10 +51,14 @@ class NepaliSoundDataset(Dataset):
 
     def __getitem__(self, index):
         audio_sample_path = self._get_audio_sample_path(index)
+        speaker_id = self._get_speaker_id(index)
         output = self._get_audio_sample_output(index)
-        signal, sr = torchaudio.load(audio_sample_path)
-        # signal = signal.to(self.device)
-        # signal = self._resample(signal, sr)
-        # signal = self._mix_down(signal)
+        signal, sr = torchaudio.load(audio_sample_path, normalize=True)
+        signal = signal.to(self.device)
+        signal = self._resample(signal, sr)
+        signal = self._mix_down(signal)
         # signal = self.transformation(signal)
-        return signal, output
+        if self.target_sample_rate != sr:
+            self.target_sample_rate = sr
+
+        return (signal, self.target_sample_rate, output, speaker_id)

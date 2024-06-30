@@ -9,7 +9,7 @@ from torch.utils.data import random_split
 
 from custom_nepali_dataset import NepaliSoundDataset
 from model import SpeechRecognitionModel
-from text_transform import TextTransform
+from text_transform import TextTransform, cer, wer
 
 train_audio_transforms = nn.Sequential(
     torchaudio.transforms.MelSpectrogram(sample_rate=16000, n_mels=128),
@@ -35,6 +35,12 @@ class IterMeter(object):
         return self.val
 
 
+def check_data_for_nan_inf(data):
+    if torch.isnan(data).any() or torch.isinf(data).any():
+        return None
+    return True
+
+
 def train(
     model,
     device,
@@ -51,6 +57,7 @@ def train(
     with experiment.train():
         for batch_idx, _data in enumerate(train_loader):
             spectrograms, labels, input_lengths, label_lengths = _data
+
             spectrograms, labels = spectrograms.to(device), labels.to(device)
 
             optimizer.zero_grad()
@@ -58,6 +65,13 @@ def train(
             output = model(spectrograms)  # (batch, time, n_class)
             output = F.log_softmax(output, dim=2)
             output = output.transpose(0, 1)  # (time, batch, n_class)
+
+            # print("....................... Evaluations ..............................")
+            # print(f"Oputput {output}")
+            # print(f"Label {labels}")
+            # print(f"Input length {input_lengths}")
+            # print(f"Label Lengths {label_lengths}")
+            # print("...................................................................")
 
             loss = criterion(output, labels, input_lengths, label_lengths)
             loss.backward()
@@ -70,7 +84,7 @@ def train(
             optimizer.step()
             scheduler.step()
             iter_meter.step()
-            if batch_idx % 100 == 0 or batch_idx == data_len:
+            if batch_idx % 10 == 0 or batch_idx == data_len:
                 print(
                     "Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}".format(
                         epoch,
@@ -83,7 +97,7 @@ def train(
 
 
 def GreedyDecoder(
-    output, labels, label_lengths, blank_label=28, collapse_repeated=True
+    output, labels, label_lengths, blank_label=71, collapse_repeated=True
 ):
     arg_maxes = torch.argmax(output, dim=2)
     decodes = []
@@ -103,7 +117,6 @@ def GreedyDecoder(
 
 
 def test(model, device, test_loader, criterion, epoch, iter_meter, experiment):
-    print("\nevaluating...")
     model.eval()
     test_loss = 0
     test_cer, test_wer = [], []
@@ -141,32 +154,12 @@ def test(model, device, test_loader, criterion, epoch, iter_meter, experiment):
 
 
 def data_processing(data, data_type="train"):
-    print("----------------------------------------------------\n")
-    print(f"Data Processing data = {data}")
-    print("----------------------------------------------------\n")
     spectrograms = []
     labels = []
     input_lengths = []
     label_lengths = []
 
-    # for item in data:
-    #     print("Data item:", item)  # Add this line to inspect the dataset structure
-    #     waveform, _, utterance, _, _, _ = item
-    #     if data_type == "train":
-    #         spec = train_audio_transforms(waveform).squeeze(0).transpose(0, 1)
-    #     elif data_type == "valid":
-    #         spec = valid_audio_transforms(waveform).squeeze(0).transpose(0, 1)
-    #     else:
-    #         raise Exception("data_type should be train or valid")
-    #     spectrograms.append(spec)
-    #     label = torch.Tensor(text_transform.text_to_int(utterance.lower()))
-    #     labels.append(label)
-    #     input_lengths.append(spec.shape[0] // 2)
-    #     label_lengths.append(len(label))
-
-    for item in data:
-        print(f"Item {item}")
-        (waveform, utterance) = item
+    for waveform, _, utterance, _ in data:
         if data_type == "train":
             spec = train_audio_transforms(waveform).squeeze(0).transpose(0, 1)
         elif data_type == "valid":
@@ -200,7 +193,7 @@ def main(
         "n_cnn_layers": 3,
         "n_rnn_layers": 5,
         "rnn_dim": 512,
-        "n_class": 29,
+        "n_class": 77,
         "n_feats": 128,
         "stride": 2,
         "dropout": 0.1,
@@ -234,6 +227,8 @@ def main(
         collate_fn=lambda x: data_processing(x, "train"),
         **kwargs,
     )
+    print(f"Train Loader: {train_loader}")
+
     test_loader = data.DataLoader(
         dataset=test_dataset,
         batch_size=hparams["batch_size"],
@@ -241,6 +236,15 @@ def main(
         collate_fn=lambda x: data_processing(x, "valid"),
         **kwargs,
     )
+    print(f"Test Loader {test_loader}")
+
+    # # Iterate over the DataLoader
+    # for batch, _data in enumerate(train_loader):
+    #     # print(f"Batch: {batch}\n")
+    #     (padded_tensors, sample_rates, transcripts, speaker_ids) = _data
+    #     # Use the batch for training
+    #     # print("Batch of padded tensors:", padded_tensors.shape)
+    #     # Training code goes here
 
     model = SpeechRecognitionModel(
         hparams["n_cnn_layers"],
@@ -252,12 +256,13 @@ def main(
         hparams["dropout"],
     ).to(device)
 
-    print(model)
+    print(f"Model: {model}")
     print(
         "Num Model Parameters", sum([param.nelement() for param in model.parameters()])
     )
+
     optimizer = optim.AdamW(model.parameters(), hparams["learning_rate"])
-    criterion = nn.CTCLoss(blank=28).to(device)
+    criterion = nn.CTCLoss(blank=71).to(device)
     scheduler = optim.lr_scheduler.OneCycleLR(
         optimizer,
         max_lr=hparams["learning_rate"],
@@ -266,9 +271,9 @@ def main(
         anneal_strategy="linear",
     )
 
-    print(f"Optimizer {optimizer}")
-    print(f"Criterion {criterion}")
-    print(f"Scheduler {scheduler}")
+    # print(f"Optimizer {optimizer}")
+    # print(f"Criterion {criterion}")
+    # print(f"Scheduler {scheduler}")
 
     iter_meter = IterMeter()
     for epoch in range(1, epochs + 1):
@@ -284,6 +289,16 @@ def main(
             experiment,
         )
         test(model, device, test_loader, criterion, epoch, iter_meter, experiment)
+
+    # Save the model and optimizer state dicts
+    torch.save(
+        {
+            "model_state_dict": model.state_dict(),
+            "optimizer_state_dict": optimizer.state_dict(),
+        },
+        "speech_recognition.pth",
+    )
+    print("Trained model successfully")
 
 
 if __name__ == "__main__":
@@ -307,10 +322,13 @@ if __name__ == "__main__":
     dataset = NepaliSoundDataset(
         ANNOTATIONS_FILE_PATH, AUDIO_DIR, mel_spectrogram, SAMPLE_RATE, device
     )
+
     print(f"There are {len(dataset)} items")
-    signal, output = dataset[67]
-    print(f"signal shape {signal.shape}")
-    print(f"signal {signal}\n output {output}")
+    # signal, sample_rate, output, speaker_id = dataset[400]
+    # print(
+    #     f"Signal {signal}\n Output {output} \nSample rate {sample_rate}\nSpeaker Id {speaker_id}"
+    # )
+    # print(f"Shape {signal.shape}")
 
     # Setting Comet Experiment
     comet_api_key = "uAoybvu8H90J4enDCx6FHdxKO"  # add your api key here
@@ -329,4 +347,4 @@ if __name__ == "__main__":
     learning_rate = 5e-4
     batch_size = 10
     epochs = 10
-    main(dataset, learning_rate, batch_size, epochs, experiment)
+    main(dataset, learning_rate, batch_size, epochs)
