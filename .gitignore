@@ -168,3 +168,5 @@ data/
 learn_pytorch/
 learning/
 pytorch/
+tests/
+*.pth
