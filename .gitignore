@@ -169,4 +169,5 @@ learn_pytorch/
 learning/
 pytorch/
 tests/
+output/
 *.pth
