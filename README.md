@@ -1,8 +1,11 @@
 # SpeechRecognition
 
-Learning Speech Recognition
+Automatic Speech Recognition for Nepali Language
 
-## DataSet
+## Dataset(OpenSLR)
 
-Multispeaker female nepali voice from `openslr`
-link: `https://openslr.org/43/`
+https://openslr.org/43/
+
+## References:
+
+1. https://www.assemblyai.com/blog/end-to-end-speech-recognition-pytorch/
